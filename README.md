@@ -15,6 +15,14 @@ An autonomous AI agent that scrapes the internet for marketing-related informati
 
 ---
 
+## 📈 Example Use Cases
+Track marketing trends from top blogs.
+
+Build a knowledge base or newsletter from daily summaries.
+
+Perform sentiment or trend analysis on industry news.
+
+
 ## 🗂️ Project Structure
 
 ```
@@ -55,28 +63,44 @@ pip install -r requirements.txt
 ```
 
 ## 🚀 Usage
-To manually run the agent:
 
-bash
-Copy
-Edit
-python main.py
+### Create an `.env` file
+
+Example:
+
+```
+OPENAI_API_KEY="***"
+DEEPSEEK_API_KEY="***"
+NEO4J_USERNAME="***"
+NEO4J_PASSWORD="***"
+```
+
+
+### Manually run the agent:
+
+#### * to build the knowledge base
+
+```commandline
+python scheduler/run_daily.py
+```
+
 To schedule it to run daily, consider using:
 
-cron (Linux/macOS)
+* cron (Linux/macOS)
 
-Task Scheduler (Windows)
+* Task Scheduler (Windows)
 
-Python-based job scheduler (e.g., APScheduler)
+* Python-based job scheduler (e.g., APScheduler)
 
-Cloud schedulers (AWS Lambda, GitHub Actions, etc.)
+* Cloud schedulers (AWS Lambda, GitHub Actions, etc.)
 
-## 📈 Example Use Cases
-Track marketing trends from top blogs.
 
-Build a knowledge base or newsletter from daily summaries.
+#### * to query the knowledge base
+```commandline
+python main.py 'What are the latest trends in email marketing?'
+```
 
-Perform sentiment or trend analysis on industry news.
+
 
 ## 🛡️ Ethics & Legal
 Scraping adheres to each site’s robots.txt policy.
