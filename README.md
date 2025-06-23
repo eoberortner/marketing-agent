@@ -114,7 +114,7 @@ Use APIs where available for better reliability and compliance.
 
  * Integrate a triplet store for semantic search
 
- * Build a web dashboard or Streamlit UI
+ * Build a web UI and APIs
 
  * Implement daily email digests or Slack alerts
 
