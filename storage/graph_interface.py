@@ -1,9 +1,26 @@
+import os
+
 from neo4j import GraphDatabase
 
 
 class GraphStorage:
-    def __init__(self, uri="bolt://localhost:7687", user="neo4j", password="RqM933mqEFs7ApypkJ"):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+    def __init__(
+        self,
+        uri="bolt://localhost:7687",
+        user: str = None,
+        password: str = None,
+    ):
+        self.user = user
+        if self.user is None:
+            self.user = os.getenv("NEO4J_USERNAME")
+
+        self.password = password
+        if self.password is None:
+            self.password = os.getenv("NEO4J_PASSWORD")
+
+        self.driver = GraphDatabase.driver(
+            uri, auth=(self.user, self.password)
+        )
 
     def close(self):
         self.driver.close()
@@ -22,7 +39,7 @@ class GraphStorage:
                     "title": article["title"],
                     "link": article["link"],
                     "summary": article["summary_processed"],
-                    "published": article["published"]
+                    "published": article["published"],
                 },
             )
             print(f"🌐 Added to graph: {article['title']}")

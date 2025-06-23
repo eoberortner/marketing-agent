@@ -14,9 +14,10 @@ RSS_FEEDS = [
 KEYWORDS = ["marketing", "seo", "content", "strategy", "branding"]
 
 
-
 class RSSFetcher:
-    def __init__(self, feeds: List[str] = RSS_FEEDS, keywords: List[str] = KEYWORDS):
+    def __init__(
+        self, feeds: List[str] = RSS_FEEDS, keywords: List[str] = KEYWORDS
+    ):
         self.feeds = feeds
         self.keywords = [kw.lower() for kw in (keywords or [])]
 
@@ -33,7 +34,9 @@ class RSSFetcher:
     def _is_relevant(self, entry) -> bool:
         if not self.keywords:
             return True
-        content = f"{entry.get('title', '')} {entry.get('summary', '')}".lower()
+        content = (
+            f"{entry.get('title', '')} {entry.get('summary', '')}".lower()
+        )
         return any(kw in content for kw in self.keywords)
 
     def _parse_entry(self, entry) -> Dict:
@@ -42,7 +45,7 @@ class RSSFetcher:
             "link": entry.get("link", ""),
             "published": self._parse_date(entry.get("published", "")),
             "summary": entry.get("summary", ""),
-            "source": entry.get("source", {}).get("title", "Unknown Source")
+            "source": entry.get("source", {}).get("title", "Unknown Source"),
         }
 
     def _parse_date(self, date_str: str) -> str:

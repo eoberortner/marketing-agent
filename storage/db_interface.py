@@ -3,7 +3,9 @@ from datetime import datetime
 
 
 class MongoStorage:
-    def __init__(self, uri="mongodb://localhost:27017/", db_name="marketing_agent"):
+    def __init__(
+        self, uri="mongodb://localhost:27017/", db_name="marketing_agent"
+    ):
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
         self.collection = self.db["summaries"]
