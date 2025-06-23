@@ -110,13 +110,13 @@ Content is summarized or stored with attribution to the original source.
 Use APIs where available for better reliability and compliance.
 
 ## 🧩 TODO
- Add support for more data sources
+ * Add support for more data sources
 
- Integrate a vector database for semantic search
+ * Integrate a triplet store for semantic search
 
- Build a web dashboard or Streamlit UI
+ * Build a web dashboard or Streamlit UI
 
- Implement daily email digests or Slack alerts
+ * Implement daily email digests or Slack alerts
 
 ## 👥 Contributions
 Open to feedback and collaboration! Please file an issue or submit a pull request with ideas or improvements.
