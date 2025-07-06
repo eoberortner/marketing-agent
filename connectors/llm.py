@@ -32,6 +32,7 @@ class DeepSeekClient(LLMClient):
         messages: List[Dict],
         temperature: float = 0.7,
         max_tokens: int = 1500,
+        timeout: int = 60,
     ):
         """
         messages: List of messages in format:
@@ -42,17 +43,23 @@ class DeepSeekClient(LLMClient):
         # print(f"[{self.llm_provider}] Sending messages to OpenAI API...{messages}")
 
         try:
-
+            import time
+            start_time = time.time()
+            
             response = self.client.chat.completions.create(
-                model=self.model, messages=messages
+                model=self.model, 
+                messages=messages,
+                timeout=timeout
             )
 
             response_content = response.choices[0].message.content
-            print(f"[self.llm_provider] chat responded...{response_content}")
+            elapsed = time.time() - start_time
+            print(f"[{self.llm_provider}] chat responded in {elapsed:.2f}s...{response_content[:100]}...")
 
             return response_content
 
         except Exception as e:
+            print(f"[{self.llm_provider}] Error in chat: {e}")
             return f"Error: {e}"
 
     def summarize(self, agent_description: str, task_description: Dict) -> str:

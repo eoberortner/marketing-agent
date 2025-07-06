@@ -9,6 +9,7 @@ from typing import Dict
 
 from connectors.llm import DeepSeekClient
 from storage.vector_store import VectorStore
+import traceback
 
 
 def update_knowledge_base():
@@ -33,45 +34,89 @@ def update_knowledge_base():
     Returns:
         None
     """
+    import time
+    start_time = time.time()
+    
     print(f"🚀 Starting Marketing Agent - {datetime.now().isoformat()}")
 
-    fetcher = RSSFetcher()
-    articles = fetcher.fetch()
-    print(f"✅ Fetched {len(articles)} relevant articles.")
+    try:
+        # Step 1: Fetch articles
+        print("📡 Fetching articles from RSS feeds...")
+        fetcher = RSSFetcher()
+        articles = fetcher.fetch()
+        print(f"✅ Fetched {len(articles)} relevant articles.")
 
-    if not articles:
-        print("⚠️ No relevant articles found. Exiting.")
-        return
+        if not articles:
+            print("⚠️ No relevant articles found. Exiting.")
+            return
 
-    summarizer = Summarizer()
-    db = MongoStorage()
-    graph = GraphStorage()
-    kg = KnowledgeGraph()
-    vs = VectorStore()
+        # Step 2: Initialize components
+        print("🔧 Initializing components...")
+        summarizer = Summarizer()
+        db = MongoStorage()
+        graph = GraphStorage()
+        kg = KnowledgeGraph()
+        vs = VectorStore()
 
-    processed_articles = []
-    for article in articles:
-        article["summary_processed"] = summarizer.summarize(
-            article["summary"] or article["title"]
-        )
-        processed_articles.append(article)
+        # Step 3: Process articles
+        print(f"🔄 Processing {len(articles)} articles...")
+        processed_articles = []
+        
+        for i, article in enumerate(articles, 1):
+            try:
+                print(f"  📝 Processing article {i}/{len(articles)}: {article['title'][:50]}...")
+                
+                # Summarize article
+                article["summary_processed"] = summarizer.summarize(
+                    article["summary"] or article["title"]
+                )
+                processed_articles.append(article)
 
-        # Store in MongoDB
-        db.save_article(article)
+                # Store in MongoDB
+                try:
+                    db.save_article(article)
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to save to MongoDB: {e}")
 
-        # Store in Neo4j (legacy)
-        graph.store_article(article)
+                # Store in Neo4j (legacy)
+                try:
+                    graph.store_article(article)
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to save to Neo4j: {e}")
 
-        # Store in Knowledge Graph
-        kg.store_article_with_knowledge_graph(article)
+                # Store in Knowledge Graph
+                try:
+                    kg.store_article_with_knowledge_graph(article)
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to save to Knowledge Graph: {e}")
 
-    # Store in Vector Store
-    vs.add_documents(processed_articles)
-    
-    # Close knowledge graph connection
-    kg.close()
+            except Exception as e:
+                print(f"❌ Error processing article {i}: {e}")
+                continue
 
-    print(f"\n✅ Completed at {datetime.now().isoformat()}")
+        # Step 4: Store in Vector Store
+        print("💾 Storing articles in vector store...")
+        try:
+            vs.add_documents(processed_articles)
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to save to vector store: {e}")
+        
+        # Step 5: Cleanup
+        try:
+            kg.close()
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to close knowledge graph: {e}")
+
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"\n✅ Completed at {datetime.now().isoformat()}")
+        print(f"⏱️ Total time: {duration:.2f} seconds")
+        print(f"📊 Processed: {len(processed_articles)}/{len(articles)} articles successfully")
+
+    except Exception as e:
+        print(f"❌ Critical error in update_knowledge_base: {e}")
+        print(traceback.format_exc())
+        raise
 
 
 def update_knowledge_base_parallel(

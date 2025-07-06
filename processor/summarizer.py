@@ -10,12 +10,11 @@ class Summarizer:
 
     def summarize(self, text: str) -> str:
 
-        task_description = f"""
-TASK: Summarize the text below.
-TEXT TO SUMMARIZE: {text}
-        
-Extract each individual sentence from the following summary as a standalone string, removing bullet points, numbering, and formatting. 
-Output only a list of sentences, one per line, ready for embedding generation via a sentence-transformer."""
+        task_description = {
+            "task": "Summarize the text below.",
+            "text": text,
+            "instruction": "Extract each individual sentence from the following summary as a standalone string, removing bullet points, numbering, and formatting. Output only a list of sentences, one per line, ready for embedding generation via a sentence-transformer."
+        }
         summary = self.llm_client.summarize(
             self.agent_description, task_description
         )
