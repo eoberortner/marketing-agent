@@ -7,7 +7,13 @@ of how to use the system.
 """
 
 import json
+import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 from functions import query_knowledge_graph, get_knowledge_graph_insights, update_knowledge_base
 
 

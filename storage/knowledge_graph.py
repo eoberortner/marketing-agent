@@ -174,27 +174,41 @@ class KnowledgeGraph:
             
             # Create entity nodes and relationships
             for entity in extracted_data.get("entities", []):
-                session.run("""
-                    MERGE (entity:Entity {name: $name, type: $type})
-                    MERGE (article)-[:MENTIONS]->(entity)
-                    """, {
-                        "name": entity["name"],
-                        "type": entity["type"]
-                    })
+                try:
+                    session.run("""
+                        MERGE (entity:Entity {name: $name})
+                        ON CREATE SET entity.type = $type
+                        ON MATCH SET entity.type = CASE 
+                            WHEN entity.type IS NULL THEN $type 
+                            ELSE entity.type 
+                        END
+                        MERGE (article)-[:MENTIONS]->(entity)
+                        """, {
+                            "name": entity["name"],
+                            "type": entity["type"]
+                        })
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not create entity {entity['name']}: {e}")
+                    continue
             
             # Create relationship nodes
             for rel in extracted_data.get("relationships", []):
-                session.run("""
-                    MERGE (from:Entity {name: $from_name})
-                    MERGE (to:Entity {name: $to_name})
-                    MERGE (from)-[r:RELATES_TO {type: $rel_type, description: $description}]->(to)
-                    MERGE (article)-[:DESCRIBES]->(r)
-                    """, {
-                        "from_name": rel["from"],
-                        "to_name": rel["to"],
-                        "rel_type": rel["relationship"],
-                        "description": rel.get("description", "")
-                    })
+                try:
+                    session.run("""
+                        MERGE (from:Entity {name: $from_name})
+                        MERGE (to:Entity {name: $to_name})
+                        MERGE (from)-[r:RELATES_TO {type: $rel_type, description: $description}]->(to)
+                        MERGE (article)-[:DESCRIBES_RELATIONSHIP]->(from)
+                        MERGE (article)-[:DESCRIBES_RELATIONSHIP]->(to)
+                        """, {
+                            "from_name": rel["from"],
+                            "to_name": rel["to"],
+                            "rel_type": rel["relationship"],
+                            "description": rel.get("description", "")
+                        })
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not create relationship {rel['from']} -> {rel['to']}: {e}")
+                    continue
             
             print(f"🌐 Added to knowledge graph: {article['title']}")
 
@@ -229,12 +243,24 @@ class KnowledgeGraph:
         Get the network of relationships around a specific entity.
         """
         with self.driver.session() as session:
-            result = session.run("""
-                MATCH path = (start:Entity {name: $entity_name})-[*1..$depth]-(connected)
+            # Build the relationship pattern based on depth
+            if depth == 1:
+                rel_pattern = "*1"
+            elif depth == 2:
+                rel_pattern = "*1..2"
+            elif depth == 3:
+                rel_pattern = "*1..3"
+            else:
+                rel_pattern = "*1..5"  # Cap at 5 for performance
+            
+            query = f"""
+                MATCH path = (start:Entity {{name: $entity_name}})-[{rel_pattern}]-(connected)
                 WHERE connected:Entity OR connected:Article
                 RETURN path
                 LIMIT 100
-                """, {"entity_name": entity_name, "depth": depth})
+                """
+            
+            result = session.run(query, {"entity_name": entity_name})
             
             # Process the path results
             nodes = set()
