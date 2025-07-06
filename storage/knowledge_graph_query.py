@@ -6,7 +6,12 @@ from connectors.llm import DeepSeekClient
 class KnowledgeGraphQuery:
     def __init__(self):
         self.kg = KnowledgeGraph()
-        self.llm_client = DeepSeekClient()
+        # Initialize LLM client with explicit API key
+        import os
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY environment variable is required")
+        self.llm_client = DeepSeekClient(api_key=api_key)
 
     def close(self):
         self.kg.close()
@@ -47,9 +52,14 @@ class KnowledgeGraphQuery:
         """
         
         try:
+            task_description = {
+                "task": "Classify the query type",
+                "prompt": classification_prompt,
+                "format": "category"
+            }
             response = self.llm_client.summarize(
                 agent_description="You are an expert at classifying queries.",
-                task_description=classification_prompt
+                task_description=task_description
             )
             return response.strip().lower()
         except:
@@ -86,19 +96,35 @@ class KnowledgeGraphQuery:
         """
         Handle queries about marketing topics and concepts.
         """
-        articles = self.kg.query_knowledge_graph(query, limit=15)
+        # Extract key terms from the query
+        key_terms = self._extract_key_terms(query)
+        
+        # Search for articles using key terms
+        articles = []
+        for term in key_terms:
+            term_articles = self.kg.query_knowledge_graph(term, limit=10)
+            articles.extend(term_articles)
+        
+        # Remove duplicates based on title
+        seen_titles = set()
+        unique_articles = []
+        for article in articles:
+            if article.get('title') not in seen_titles:
+                seen_titles.add(article.get('title'))
+                unique_articles.append(article)
         
         # Get trending topics related to the query
         trending = self.kg.get_trending_topics(days=30)
         
         # Generate summary
-        summary = self._generate_topic_summary(query, articles, trending)
+        summary = self._generate_topic_summary(query, unique_articles, trending)
         
         return {
             "query_type": "topic_search",
             "topic": query,
+            "key_terms": key_terms,
             "summary": summary,
-            "articles": articles,
+            "articles": unique_articles[:15],  # Limit to 15 articles
             "trending_topics": trending
         }
 
@@ -202,6 +228,41 @@ class KnowledgeGraphQuery:
         
         return found_entities
 
+    def _extract_key_terms(self, query: str) -> List[str]:
+        """
+        Extract key terms from a natural language query for topic search.
+        """
+        # Common marketing topics and terms
+        marketing_terms = [
+            "A/B testing", "AB testing", "split testing", "conversion optimization",
+            "email marketing", "social media", "content marketing", "SEO", "PPC",
+            "lead generation", "customer acquisition", "branding", "analytics",
+            "automation", "personalization", "retargeting", "influencer marketing",
+            "video marketing", "mobile marketing", "local SEO", "voice search",
+            "chatbots", "AI marketing", "machine learning", "data-driven",
+            "customer experience", "user experience", "conversion rate",
+            "click-through rate", "bounce rate", "engagement", "ROI"
+        ]
+        
+        # Extract terms that appear in the query
+        found_terms = []
+        query_lower = query.lower()
+        
+        for term in marketing_terms:
+            if term.lower() in query_lower:
+                found_terms.append(term)
+        
+        # If no specific terms found, try to extract general words
+        if not found_terms:
+            # Remove common words and extract meaningful terms
+            import re
+            words = re.findall(r'\b\w+\b', query.lower())
+            stop_words = {'what', 'can', 'you', 'tell', 'me', 'about', 'and', 'its', 'in', 'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall'}
+            meaningful_words = [word for word in words if word not in stop_words and len(word) > 2]
+            found_terms = meaningful_words[:5]  # Limit to 5 most relevant words
+        
+        return found_terms
+
     def _generate_entity_summary(self, entity: str, articles: List[Dict], network: Dict) -> str:
         """
         Generate a summary about an entity based on articles and network data.
@@ -231,9 +292,14 @@ class KnowledgeGraphQuery:
         """
         
         try:
+            task_description = {
+                "task": "Generate entity summary",
+                "prompt": prompt,
+                "format": "markdown"
+            }
             return self.llm_client.summarize(
                 agent_description="You are a marketing expert providing insights about companies and tools.",
-                task_description=prompt
+                task_description=task_description
             )
         except:
             return f"Found {len(articles)} articles about {entity} in the knowledge base."
@@ -266,9 +332,14 @@ class KnowledgeGraphQuery:
         """
         
         try:
+            task_description = {
+                "task": "Generate topic summary",
+                "prompt": prompt,
+                "format": "markdown"
+            }
             return self.llm_client.summarize(
                 agent_description="You are a marketing expert providing insights about marketing topics.",
-                task_description=prompt
+                task_description=task_description
             )
         except:
             return f"Found {len(articles)} articles about {topic} in the knowledge base."
@@ -301,9 +372,14 @@ class KnowledgeGraphQuery:
         """
         
         try:
+            task_description = {
+                "task": "Generate trending summary",
+                "prompt": prompt,
+                "format": "markdown"
+            }
             return self.llm_client.summarize(
                 agent_description="You are a marketing expert analyzing trends and developments.",
-                task_description=prompt
+                task_description=task_description
             )
         except:
             return f"Found {len(trending)} trending topics in the recent data."
@@ -338,9 +414,14 @@ class KnowledgeGraphQuery:
         """
         
         try:
+            task_description = {
+                "task": "Generate relationship summary",
+                "prompt": prompt,
+                "format": "markdown"
+            }
             return self.llm_client.summarize(
                 agent_description="You are a marketing expert analyzing relationships between companies and tools.",
-                task_description=prompt
+                task_description=task_description
             )
         except:
             return f"Found {len(articles)} articles about the relationship between {', '.join(entities)}."
@@ -367,9 +448,14 @@ class KnowledgeGraphQuery:
         """
         
         try:
+            task_description = {
+                "task": "Generate general summary",
+                "prompt": prompt,
+                "format": "markdown"
+            }
             return self.llm_client.summarize(
                 agent_description="You are a marketing expert providing comprehensive answers to queries.",
-                task_description=prompt
+                task_description=task_description
             )
         except:
             return f"Found {len(articles)} articles related to '{query}' in the knowledge base."

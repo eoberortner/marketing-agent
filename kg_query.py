@@ -8,18 +8,29 @@ It supports various types of queries and provides structured results.
 
 import argparse
 import json
+import os
 from typing import Dict, List
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 from functions import query_knowledge_graph, get_knowledge_graph_insights
 
 
 def format_article(article: Dict) -> str:
-    """Format an article for display."""
+    topics = article.get('topics', [])
+    if not isinstance(topics, list):
+        topics = [str(topics)] if topics else []
+    entities = article.get('entities', [])
+    if not isinstance(entities, list):
+        entities = [str(entities)] if entities else []
     return f"""
 📰 {article.get('title', 'No Title')}
 🔗 {article.get('link', 'No Link')}
 📅 {article.get('published', 'No Date')}
-📊 Topics: {', '.join(article.get('topics', []))}
-🏷️ Entities: {', '.join(article.get('entities', []))}
+📊 Topics: {', '.join(topics)}
+🏷️ Entities: {', '.join(entities)}
 📝 {article.get('summary', 'No Summary')[:200]}...
 """
 

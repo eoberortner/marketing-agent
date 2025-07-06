@@ -24,7 +24,11 @@ class KnowledgeGraph:
         self.driver = GraphDatabase.driver(
             uri, auth=(self.user, self.password)
         )
-        self.llm_client = DeepSeekClient()
+        # Initialize LLM client with explicit API key
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY environment variable is required")
+        self.llm_client = DeepSeekClient(api_key=api_key)
         
         # Initialize the graph schema
         self._initialize_schema()
@@ -74,9 +78,14 @@ class KnowledgeGraph:
         """
         
         try:
+            task_description = {
+                "task": "Analyze the marketing article and extract structured information",
+                "prompt": prompt,
+                "format": "JSON"
+            }
             response = self.llm_client.summarize(
                 agent_description="You are an expert at analyzing marketing content and extracting structured information.",
-                task_description=prompt
+                task_description=task_description
             )
             
             # Try to parse JSON from response
@@ -217,15 +226,33 @@ class KnowledgeGraph:
         Query the knowledge graph for relevant information.
         """
         with self.driver.session() as session:
-            # Search for articles, entities, and relationships
-            result = session.run("""
+            # Split query into words for more flexible matching
+            query_words = query.lower().split()
+            
+            # Build dynamic query conditions
+            conditions = []
+            for word in query_words:
+                if len(word) > 2:  # Only use words longer than 2 characters
+                    conditions.append(f"toLower(article.title) CONTAINS '{word}'")
+                    conditions.append(f"toLower(article.summary) CONTAINS '{word}'")
+                    conditions.append(f"any(topic IN article.topics WHERE toLower(topic) CONTAINS '{word}')")
+            
+            # If no conditions, use original query
+            if not conditions:
+                conditions = [
+                    f"toLower(article.title) CONTAINS toLower('{query}')",
+                    f"toLower(article.summary) CONTAINS toLower('{query}')",
+                    f"any(topic IN article.topics WHERE toLower(topic) CONTAINS toLower('{query}'))"
+                ]
+            
+            where_clause = " OR ".join(conditions)
+            
+            cypher_query = f"""
                 MATCH (article:Article)
-                WHERE toLower(article.title) CONTAINS toLower($query)
-                   OR toLower(article.summary) CONTAINS toLower($query)
-                   OR any(topic IN article.topics WHERE toLower(topic) CONTAINS toLower($query))
+                WHERE {where_clause}
                 OPTIONAL MATCH (article)-[:MENTIONS]->(entity:Entity)
                 OPTIONAL MATCH (source:Source)-[:PUBLISHES]->(article)
-                RETURN article.title as title,
+                RETURN DISTINCT article.title as title,
                        article.link as link,
                        article.summary as summary,
                        article.published as published,
@@ -234,7 +261,9 @@ class KnowledgeGraph:
                        collect(DISTINCT entity.name) as entities
                 ORDER BY article.published DESC
                 LIMIT $limit
-                """, {"query": query, "limit": limit})
+                """
+            
+            result = session.run(cypher_query, {"limit": limit})
             
             return [dict(record) for record in result]
 
@@ -269,7 +298,9 @@ class KnowledgeGraph:
             for record in result:
                 path = record["path"]
                 for node in path.nodes:
-                    nodes.add((node.labels[0], node.get("name", node.get("title", "Unknown"))))
+                    # Convert frozenset to list and get first label
+                    node_type = list(node.labels)[0] if node.labels else "Unknown"
+                    nodes.add((node_type, node.get("name", node.get("title", "Unknown"))))
                 for rel in path.relationships:
                     relationships.add((rel.start_node.get("name", "Unknown"), 
                                    rel.end_node.get("name", "Unknown"), 

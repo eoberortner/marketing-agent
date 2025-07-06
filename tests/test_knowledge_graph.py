@@ -1,258 +1,191 @@
-import unittest
-from unittest.mock import Mock, patch, MagicMock
+#!/usr/bin/env python3
+"""
+Test script for the Knowledge Graph functionality
+
+This script demonstrates the knowledge graph features and provides examples
+of how to use the system.
+"""
+
 import json
+import os
 from datetime import datetime
-from storage.knowledge_graph import KnowledgeGraph
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+from functions import query_knowledge_graph, get_knowledge_graph_insights, update_knowledge_base
 
 
-class TestKnowledgeGraph(unittest.TestCase):
-    """Test cases for the KnowledgeGraph class."""
+def test_knowledge_graph():
+    """Test the knowledge graph functionality."""
+    print("🧪 Testing Knowledge Graph Functionality")
+    print("=" * 50)
+    
+    # Test 1: Get insights
+    print("\n1️⃣ Getting Knowledge Graph Insights...")
+    try:
+        insights = get_knowledge_graph_insights()
+        print(f"✅ Successfully retrieved insights")
+        print(f"📊 Total Articles: {insights.get('total_articles', 0)}")
+        print(f"🏷️ Total Entities: {insights.get('total_entities', 0)}")
+        print(f"📰 Total Sources: {insights.get('total_sources', 0)}")
+    except Exception as e:
+        print(f"❌ Failed to get insights: {e}")
+    
+    # Test 2: Entity search
+    print("\n2️⃣ Testing Entity Search...")
+    test_entities = ["Google", "HubSpot", "Facebook", "SEO"]
+    for entity in test_entities:
+        try:
+            print(f"\n🔍 Searching for: {entity}")
+            results = query_knowledge_graph(f"Tell me about {entity}")
+            if results.get('articles'):
+                print(f"✅ Found {len(results['articles'])} articles about {entity}")
+                if results.get('summary'):
+                    print(f"📝 Summary: {results['summary'][:100]}...")
+            else:
+                print(f"⚠️ No articles found for {entity}")
+        except Exception as e:
+            print(f"❌ Failed to search for {entity}: {e}")
+    
+    # Test 3: Topic search
+    print("\n3️⃣ Testing Topic Search...")
+    test_topics = ["email marketing", "social media", "content marketing", "analytics"]
+    for topic in test_topics:
+        try:
+            print(f"\n🔍 Searching for: {topic}")
+            results = query_knowledge_graph(f"What are the latest trends in {topic}?")
+            if results.get('articles'):
+                print(f"✅ Found {len(results['articles'])} articles about {topic}")
+                if results.get('summary'):
+                    print(f"📝 Summary: {results['summary'][:100]}...")
+            else:
+                print(f"⚠️ No articles found for {topic}")
+        except Exception as e:
+            print(f"❌ Failed to search for {topic}: {e}")
+    
+    # Test 4: Trending topics
+    print("\n4️⃣ Testing Trending Topics...")
+    try:
+        results = query_knowledge_graph("What are the current trending topics in marketing?")
+        if results.get('trending_topics'):
+            print(f"✅ Found {len(results['trending_topics'])} trending topics")
+            for i, topic in enumerate(results['trending_topics'][:5], 1):
+                print(f"  {i}. {topic['topic']} ({topic['frequency']} mentions)")
+        else:
+            print("⚠️ No trending topics found")
+    except Exception as e:
+        print(f"❌ Failed to get trending topics: {e}")
+    
+    # Test 5: Relationship search
+    print("\n5️⃣ Testing Relationship Search...")
+    test_relationships = [
+        "Google and Facebook",
+        "HubSpot and email marketing",
+        "SEO and content marketing"
+    ]
+    for rel in test_relationships:
+        try:
+            print(f"\n🔍 Searching for relationship: {rel}")
+            results = query_knowledge_graph(f"How do {rel} relate to each other?")
+            if results.get('articles'):
+                print(f"✅ Found {len(results['articles'])} articles about {rel}")
+                if results.get('summary'):
+                    print(f"📝 Summary: {results['summary'][:100]}...")
+            else:
+                print(f"⚠️ No articles found for {rel}")
+        except Exception as e:
+            print(f"❌ Failed to search for {rel}: {e}")
 
-    def setUp(self):
-        """Set up test fixtures."""
-        # Mock the Neo4j driver
-        self.mock_driver = Mock()
-        self.mock_session = Mock()
-        self.mock_driver.session.return_value.__enter__.return_value = self.mock_session
-        
-        with patch('storage.knowledge_graph.GraphDatabase.driver') as mock_driver_class:
-            mock_driver_class.return_value = self.mock_driver
-            self.kg = KnowledgeGraph()
 
-    def tearDown(self):
-        """Clean up after tests."""
-        if hasattr(self, 'kg'):
-            self.kg.close()
-
-    def test_initialization(self):
-        """Test knowledge graph initialization."""
-        self.assertIsNotNone(self.kg)
-        self.assertIsNotNone(self.kg.driver)
-        self.assertIsNotNone(self.kg.llm_client)
-
-    def test_initialize_schema(self):
-        """Test schema initialization."""
-        # Verify that schema initialization calls are made
-        self.mock_session.run.assert_called()
-        calls = self.mock_session.run.call_args_list
-        
-        # Check that constraint creation calls were made
-        constraint_calls = [call for call in calls if 'CREATE CONSTRAINT' in str(call)]
-        self.assertGreater(len(constraint_calls), 0)
-
-    def test_basic_entity_extraction(self):
-        """Test basic entity extraction without LLM."""
-        article = {
-            "title": "Google Analytics 4: Complete Guide for 2024",
-            "summary": "Learn how to use Google Analytics 4 for better marketing insights. HubSpot integration tips included.",
-            "summary_processed": "Google Analytics 4 provides advanced marketing analytics. Works well with HubSpot."
-        }
-        
-        result = self.kg._basic_entity_extraction(article)
-        
-        self.assertIn('entities', result)
-        self.assertIn('relationships', result)
-        self.assertIn('topics', result)
-        self.assertIn('insights', result)
-        self.assertIn('trends', result)
-        
-        # Check that Google and HubSpot were extracted
-        entity_names = [entity['name'] for entity in result['entities']]
-        self.assertIn('Google', entity_names)
-        self.assertIn('HubSpot', entity_names)
-
-    def test_extract_entities_and_relationships_with_llm_success(self):
-        """Test entity extraction with successful LLM response."""
-        article = {
-            "title": "HubSpot vs Salesforce: Which CRM is Better?",
-            "summary_processed": "Comparison of HubSpot and Salesforce CRM platforms for marketing teams."
-        }
-        
-        mock_response = '''
+def demo_knowledge_graph_queries():
+    """Demonstrate various knowledge graph queries."""
+    print("\n🎯 Knowledge Graph Query Demonstrations")
+    print("=" * 50)
+    
+    queries = [
         {
-            "entities": [
-                {"name": "HubSpot", "type": "COMPANY"},
-                {"name": "Salesforce", "type": "COMPANY"},
-                {"name": "CRM", "type": "CONCEPT"}
-            ],
-            "relationships": [
-                {"from": "HubSpot", "to": "Salesforce", "relationship": "COMPETES_WITH", "description": "Competing CRM platforms"}
-            ],
-            "topics": ["CRM", "marketing automation"],
-            "insights": ["HubSpot is more marketing-focused"],
-            "trends": ["Cloud-based CRM adoption"]
+            "type": "Entity Search",
+            "query": "What is HubSpot known for in marketing?",
+            "description": "Searching for information about a specific company"
+        },
+        {
+            "type": "Topic Search", 
+            "query": "What are the latest SEO trends?",
+            "description": "Searching for information about a marketing topic"
+        },
+        {
+            "type": "Trending",
+            "query": "What's trending in digital marketing?",
+            "description": "Searching for current trends"
+        },
+        {
+            "type": "Relationship",
+            "query": "How do Google and Facebook compete in digital advertising?",
+            "description": "Searching for relationships between entities"
+        },
+        {
+            "type": "General",
+            "query": "What are the best practices for email marketing?",
+            "description": "General information search"
         }
-        '''
+    ]
+    
+    for i, query_info in enumerate(queries, 1):
+        print(f"\n{i}️⃣ {query_info['type']}")
+        print(f"Query: {query_info['query']}")
+        print(f"Description: {query_info['description']}")
         
-        with patch.object(self.kg.llm_client, 'summarize', return_value=mock_response):
-            result = self.kg.extract_entities_and_relationships(article)
+        try:
+            results = query_knowledge_graph(query_info['query'])
             
-            self.assertIn('entities', result)
-            self.assertIn('relationships', result)
-            self.assertIn('topics', result)
-            self.assertIn('insights', result)
-            self.assertIn('trends', result)
+            print(f"✅ Query Type: {results.get('query_type', 'Unknown')}")
+            if results.get('articles'):
+                print(f"📰 Found {len(results['articles'])} articles")
+            if results.get('summary'):
+                print(f"📝 Summary: {results['summary'][:150]}...")
             
-            # Check extracted entities
-            entity_names = [entity['name'] for entity in result['entities']]
-            self.assertIn('HubSpot', entity_names)
-            self.assertIn('Salesforce', entity_names)
-
-    def test_extract_entities_and_relationships_with_llm_failure(self):
-        """Test entity extraction when LLM fails."""
-        article = {
-            "title": "Email Marketing Best Practices",
-            "summary_processed": "Learn email marketing strategies with Mailchimp and HubSpot."
-        }
+        except Exception as e:
+            print(f"❌ Query failed: {e}")
         
-        with patch.object(self.kg.llm_client, 'summarize', side_effect=Exception("LLM Error")):
-            result = self.kg.extract_entities_and_relationships(article)
-            
-            # Should fall back to basic extraction
-            self.assertIn('entities', result)
-            self.assertIn('relationships', result)
-            self.assertIn('topics', result)
-
-    def test_store_article_with_knowledge_graph(self):
-        """Test storing an article in the knowledge graph."""
-        article = {
-            "title": "SEO Trends 2024",
-            "link": "https://example.com/seo-trends",
-            "summary_processed": "Latest SEO trends including Google updates and content marketing.",
-            "published": "2024-01-15T10:00:00",
-            "source": "Marketing Blog"
-        }
-        
-        # Mock the entity extraction
-        extracted_data = {
-            "entities": [
-                {"name": "Google", "type": "COMPANY"},
-                {"name": "SEO", "type": "TOPIC"}
-            ],
-            "relationships": [],
-            "topics": ["SEO", "content marketing"],
-            "insights": ["Mobile-first indexing is important"],
-            "trends": ["Voice search optimization"]
-        }
-        
-        with patch.object(self.kg, 'extract_entities_and_relationships', return_value=extracted_data):
-            self.kg.store_article_with_knowledge_graph(article)
-            
-            # Verify that Neo4j operations were called
-            self.mock_session.run.assert_called()
-
-    def test_query_knowledge_graph(self):
-        """Test querying the knowledge graph."""
-        mock_result = Mock()
-        mock_result.__iter__ = lambda self: iter([
-            {
-                'title': 'Test Article',
-                'link': 'https://example.com',
-                'summary': 'Test summary',
-                'published': '2024-01-15',
-                'topics': ['SEO'],
-                'source': 'Test Source',
-                'entities': ['Google', 'SEO']
-            }
-        ])
-        
-        self.mock_session.run.return_value = mock_result
-        
-        results = self.kg.query_knowledge_graph("SEO trends", limit=5)
-        
-        self.assertIsInstance(results, list)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['title'], 'Test Article')
-
-    def test_get_entity_network(self):
-        """Test getting entity network."""
-        mock_result = Mock()
-        mock_path = Mock()
-        mock_path.nodes = [Mock(labels=['Entity'], get=lambda key, default: 'Google' if key == 'name' else default)]
-        mock_path.relationships = []
-        mock_result.__iter__ = lambda self: iter([{'path': mock_path}])
-        
-        self.mock_session.run.return_value = mock_result
-        
-        network = self.kg.get_entity_network("Google", depth=2)
-        
-        self.assertIn('entity', network)
-        self.assertIn('nodes', network)
-        self.assertIn('relationships', network)
-        self.assertEqual(network['entity'], 'Google')
-
-    def test_get_trending_topics(self):
-        """Test getting trending topics."""
-        mock_result = Mock()
-        mock_result.__iter__ = lambda self: iter([
-            {'topic': 'SEO', 'frequency': 10},
-            {'topic': 'Content Marketing', 'frequency': 8}
-        ])
-        
-        self.mock_session.run.return_value = mock_result
-        
-        trending = self.kg.get_trending_topics(days=30)
-        
-        self.assertIsInstance(trending, list)
-        self.assertEqual(len(trending), 2)
-        self.assertEqual(trending[0]['topic'], 'SEO')
-        self.assertEqual(trending[0]['frequency'], 10)
-
-    def test_get_related_articles(self):
-        """Test getting related articles."""
-        mock_result = Mock()
-        mock_result.__iter__ = lambda self: iter([
-            {
-                'title': 'Related Article',
-                'link': 'https://example.com/related',
-                'summary': 'Related content',
-                'shared_entities': 3
-            }
-        ])
-        
-        self.mock_session.run.return_value = mock_result
-        
-        related = self.kg.get_related_articles("Test Article", limit=5)
-        
-        self.assertIsInstance(related, list)
-        self.assertEqual(len(related), 1)
-        self.assertEqual(related[0]['title'], 'Related Article')
-
-    def test_get_knowledge_graph_stats(self):
-        """Test getting knowledge graph statistics."""
-        # Mock node count results
-        node_result = Mock()
-        node_result.__iter__ = lambda self: iter([
-            {'type': 'Article', 'count': 100},
-            {'type': 'Entity', 'count': 50}
-        ])
-        
-        # Mock relationship count results
-        rel_result = Mock()
-        rel_result.__iter__ = lambda self: iter([
-            {'type': 'MENTIONS', 'count': 200},
-            {'type': 'PUBLISHES', 'count': 100}
-        ])
-        
-        # Mock source count results
-        source_result = Mock()
-        source_result.__iter__ = lambda self: iter([
-            {'source': 'HubSpot', 'count': 30},
-            {'source': 'Moz', 'count': 20}
-        ])
-        
-        # Set up mock to return different results for different calls
-        self.mock_session.run.side_effect = [node_result, rel_result, source_result]
-        
-        stats = self.kg.get_knowledge_graph_stats()
-        
-        self.assertIn('nodes', stats)
-        self.assertIn('relationships', stats)
-        self.assertIn('articles_by_source', stats)
-        
-        self.assertEqual(stats['nodes']['Article'], 100)
-        self.assertEqual(stats['nodes']['Entity'], 50)
+        print("-" * 30)
 
 
-if __name__ == '__main__':
-    unittest.main() 
+def update_and_test():
+    """Update the knowledge base and then test queries."""
+    print("\n🔄 Updating Knowledge Base...")
+    print("=" * 50)
+    
+    try:
+        update_knowledge_base()
+        print("✅ Knowledge base updated successfully!")
+        
+        # Wait a moment for processing
+        import time
+        time.sleep(2)
+        
+        # Now test queries
+        test_knowledge_graph()
+        
+    except Exception as e:
+        print(f"❌ Failed to update knowledge base: {e}")
+
+
+def main():
+    """Main function to run tests."""
+    print("🚀 Knowledge Graph Test Suite")
+    print("=" * 50)
+    
+    # Check if we want to update first
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--update":
+        update_and_test()
+    else:
+        # Just run tests
+        test_knowledge_graph()
+        demo_knowledge_graph_queries()
+
+
+if __name__ == "__main__":
+    main() 

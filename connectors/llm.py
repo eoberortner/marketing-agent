@@ -63,10 +63,13 @@ class DeepSeekClient(LLMClient):
             return f"Error: {e}"
 
     def summarize(self, agent_description: str, task_description: Dict) -> str:
-        """gets an image, base64 encoded and calls the OpenAI API
-        to describe the image. Then, it returns the description as string."""
+        """Summarize information using the OpenAI API and return the description as string."""
 
-        prompt = "Summarize the following information in detail."
+        # Extract the prompt from task_description
+        if isinstance(task_description, dict):
+            prompt = task_description.get("prompt", str(task_description))
+        else:
+            prompt = str(task_description)
 
         messages = [
             {
@@ -75,10 +78,7 @@ class DeepSeekClient(LLMClient):
             },
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "text", "text": task_description},
-                ],
+                "content": prompt,
             },
         ]
 
